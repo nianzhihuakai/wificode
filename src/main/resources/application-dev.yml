@@ -1,0 +1,25 @@
+server:
+  port: 7002
+  servlet:
+    context-path: /wificode
+
+spring:
+  application:
+    name: wificode
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://182.92.179.169:5432/wificode_test
+    username: wificode_test
+    password: wificode_test
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.nzhk.wificode
+
+# 小程序通用配置
+wificode:
+  jwt:
+    secret: wificode
+  wechat:
+    appid: wx277af9de71442cb6
+    secret: ${wificode_WECHAT_SECRET:}
