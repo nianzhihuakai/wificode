@@ -17,4 +17,7 @@ public interface IWifiCodeService {
     List<WifiCodeItemResData> listByUserId(String keyword);
 
     void deleteById(String id);
+
+    /** 公开获取，供扫码用户使用，不校验登录 */
+    WifiCodeItemResData getByIdPublic(String id);
 }

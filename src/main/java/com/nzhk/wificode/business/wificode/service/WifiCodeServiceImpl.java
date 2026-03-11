@@ -126,4 +126,16 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
         entity.setUpdateTime(LocalDateTime.now());
         baseMapper.updateById(entity);
     }
+
+    @Override
+    public WifiCodeItemResData getByIdPublic(String id) {
+        if (StringUtils.isEmpty(id)) {
+            throw new BizException(40003, "参数错误");
+        }
+        WifiCode entity = baseMapper.selectById(id);
+        if (entity == null || entity.getStatus() != 1) {
+            throw new BizException(40401, "未找到该 WiFi 码");
+        }
+        return BeanConvertUtil.copySingleProperties(entity, WifiCodeItemResData::new);
+    }
 }
