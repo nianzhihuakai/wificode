@@ -16,8 +16,11 @@ mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   type-aliases-package: com.nzhk.wificode
 
-# 小程序通用配置
+# 文件上传存储目录（相对或绝对路径）
 wificode:
+  file:
+    storage-dir: E:/data/wificode/uploads
+    base-url: /wificode/file/access
   jwt:
     secret: wificode
   wechat:
