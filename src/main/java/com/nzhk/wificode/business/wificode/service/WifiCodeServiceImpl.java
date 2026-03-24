@@ -129,6 +129,11 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
 
     @Override
     public WifiCodeItemResData getByIdPublic(String id) {
+        return BeanConvertUtil.copySingleProperties(getEntityByIdPublic(id), WifiCodeItemResData::new);
+    }
+
+    @Override
+    public WifiCode getEntityByIdPublic(String id) {
         if (StringUtils.isEmpty(id)) {
             throw new BizException(40003, "参数错误");
         }
@@ -136,6 +141,6 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
         if (entity == null || entity.getStatus() != 1) {
             throw new BizException(40401, "未找到该 WiFi 码");
         }
-        return BeanConvertUtil.copySingleProperties(entity, WifiCodeItemResData::new);
+        return entity;
     }
 }

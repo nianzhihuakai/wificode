@@ -24,5 +24,6 @@ wificode:
   jwt:
     secret: wificode
   wechat:
-    appid: wx277af9de71442cb6
-    secret: 774292016e02809ddcf903edd793838a
+    appid: wx6120faf2f6e888c5
+    secret: 19d0e002601704a421e64554aab42a1f
+    check-path: false   # 开发环境不校验 page，便于未发布时生成小程序码

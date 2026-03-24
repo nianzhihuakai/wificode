@@ -56,15 +56,33 @@ public class WifiCodeController {
     /**
      * 生成小程序 URL Link，用于二维码扫码跳转
      * 无需登录，供扫码展示页使用
+     * query 含 id、uid，便于扫码后统计与溯源
      */
     @GetMapping("urllink")
     public ResponseInfo<Map<String, String>> getUrlLink(@RequestParam String id) {
-        wifiCodeService.getByIdPublic(id);
+        var entity = wifiCodeService.getEntityByIdPublic(id);
         String path = "pages/wifiqrcode/wifiqrcode";
-        String query = "id=" + id;
+        String query = StringUtils.isNotBlank(entity.getUserId())
+                ? "id=" + id + "&uid=" + entity.getUserId()
+                : "id=" + id;
         String urlLink = wechatApiService.generateUrlLink(path, query);
         Map<String, String> data = new HashMap<>();
         data.put("urlLink", urlLink);
+        return ResponseInfo.success(data);
+    }
+
+    /**
+     * 生成微信小程序码（官方圆形码样式）
+     * 无需登录，供扫码展示页使用
+     * 返回 Base64 图片，前端用 data:image/png;base64,xxx 展示
+     */
+    @GetMapping("miniprogramCode")
+    public ResponseInfo<Map<String, String>> getMiniprogramCode(@RequestParam String id) {
+        wifiCodeService.getEntityByIdPublic(id);
+        String page = "pages/wifiqrcode/wifiqrcode";
+        String imageBase64 = wechatApiService.getUnlimitedWxacode(id, page);
+        Map<String, String> data = new HashMap<>();
+        data.put("imageBase64", imageBase64);
         return ResponseInfo.success(data);
     }
 

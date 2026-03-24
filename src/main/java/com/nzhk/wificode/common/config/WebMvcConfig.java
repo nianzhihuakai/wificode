@@ -22,7 +22,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 .excludePathPatterns("/user/login", "/**/user/login")
                 .excludePathPatterns("/file/access/**", "/revice", "/revice/**")
-                .excludePathPatterns("/wificode/urllink", "/wificode/public/**");
+                .excludePathPatterns("/wificode/urllink", "/wificode/miniprogramCode", "/wificode/public/**");
     }
 
     @Override

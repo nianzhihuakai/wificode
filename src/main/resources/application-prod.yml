@@ -22,3 +22,4 @@ wificode:
   wechat:
     appid: ${wificode_WECHAT_APPID}
     secret: ${wificode_WECHAT_SECRET}
+    check-path: true    # 生产环境校验 page 必须在已发布版本中存在
