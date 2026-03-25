@@ -21,6 +21,8 @@ wificode:
   file:
     storage-dir: E:/data/wificode/uploads
     base-url: /wificode/file/access
+  qrcode:
+    storage-dir: E:/data/wificode/qrcode
   jwt:
     secret: wificode
   wechat:

@@ -17,6 +17,8 @@ mybatis-plus:
   type-aliases-package: com.nzhk.wificode
 
 wificode:
+  qrcode:
+    storage-dir: /data/wificode/qrcode
   jwt:
     secret: ${wificode_JWT_SECRET}
   wechat:

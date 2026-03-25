@@ -4,6 +4,7 @@ import com.nzhk.wificode.business.wificode.bean.WifiCodeCreateReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeDeleteReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeItemResData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeUpdateReqData;
+import com.nzhk.wificode.business.wificode.config.WificodeQrcodeProperties;
 import com.nzhk.wificode.business.wificode.service.IWifiCodeService;
 import com.nzhk.wificode.common.info.RequestInfo;
 import com.nzhk.wificode.common.info.ResponseInfo;
@@ -12,20 +13,33 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Base64;
 
 @Slf4j
 @RestController
-@RequestMapping("/wificode")
 public class WifiCodeController {
 
     @Resource
     private IWifiCodeService wifiCodeService;
     @Resource
     private WechatApiService wechatApiService;
+
+    /**
+     * 小程序码缓存落盘目录（用于 nginx 静态化/直出）
+     * 目录结构：{storageDir}/miniprogram/{id}.png
+     */
+    @Resource
+    private WificodeQrcodeProperties qrcodeProperties;
 
     @PostMapping("create")
     public ResponseInfo<WifiCodeItemResData> create(@RequestBody RequestInfo<WifiCodeCreateReqData> requestInfo) {
@@ -84,6 +98,42 @@ public class WifiCodeController {
         Map<String, String> data = new HashMap<>();
         data.put("imageBase64", imageBase64);
         return ResponseInfo.success(data);
+    }
+
+    /**
+     * 小程序码 png 直出（同时支持本地缓存）
+     * nginx 建议使用 alias/try_files 先查磁盘，不存在再反代到此接口生成。
+     */
+    @GetMapping("/qrcode/miniprogram/{id}.png")
+    public ResponseEntity<org.springframework.core.io.Resource> getMiniprogramCodeImagePng(@PathVariable String id) {
+        wifiCodeService.getEntityByIdPublic(id); // 校验存在且有效
+
+        String page = "pages/wifiqrcode/wifiqrcode";
+        Path filePath = Paths.get(qrcodeProperties.getStorageDir(), "miniprogram", id + ".png");
+
+        try {
+            if (Files.exists(filePath)) {
+                return ResponseEntity.ok()
+                        .header("Cache-Control", "max-age=2592000")
+                        .contentType(MediaType.IMAGE_PNG)
+                        .body(new FileSystemResource(filePath));
+            }
+
+            // 生成 base64 -> 写入文件
+            String imageBase64 = wechatApiService.getUnlimitedWxacode(id, page);
+            byte[] bytes = Base64.getDecoder().decode(imageBase64);
+
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, bytes);
+
+            return ResponseEntity.ok()
+                    .header("Cache-Control", "max-age=2592000")
+                    .contentType(MediaType.IMAGE_PNG)
+                    .body(new FileSystemResource(filePath));
+        } catch (Exception e) {
+            log.error("getMiniprogramCodeImagePng failed, id:{}", id, e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     /**
