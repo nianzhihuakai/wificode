@@ -11,10 +11,10 @@
     </parent>
 
     <groupId>com.nzhk</groupId>
-    <artifactId>wificode-scaffold</artifactId>
+    <artifactId>wificode</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>wificode-scaffold</name>
+    <name>wificode</name>
     <description>小程序后端基础架构脚手架 - 基于 wxg 抽取可复用模块</description>
 
     <properties>
