@@ -15,6 +15,8 @@ import com.nzhk.wificode.common.exception.BizException;
 import com.nzhk.wificode.common.utils.BeanConvertUtil;
 import com.nzhk.wificode.common.utils.IdUtil;
 import com.nzhk.wificode.common.utils.JwtUtil;
+import com.nzhk.wificode.common.utils.UserRoleUtils;
+import com.nzhk.wificode.mapper.WifiCodeMapper;
 import com.nzhk.wificode.mapper.WxUserMapper;
 import com.nzhk.wificode.wechat.config.WechatProperties;
 import jakarta.annotation.Resource;
@@ -37,6 +39,8 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
     private WechatProperties wechatProperties;
     @Resource
     private RestTemplate restTemplate;
+    @Resource
+    private WifiCodeMapper wifiCodeMapper;
 
     @Override
     public WxUserLoginResData login(WxUserLoginReqData req) {
@@ -54,6 +58,7 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
                         .sessionKey(sessionKey)
                         .nickName(StringUtils.isNotBlank(req.getNickName()) ? req.getNickName() : null)
                         .avatarUrl(StringUtils.isNotBlank(req.getAvatarUrl()) ? req.getAvatarUrl() : null)
+                        .roles(UserRoleUtils.defaultRoles())
                         .createTime(LocalDateTime.now())
                         .updateTime(LocalDateTime.now())
                         .lastLoginTime(LocalDateTime.now())
@@ -66,6 +71,7 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
                             .id(IdUtil.getId())
                             .openid(openId)
                             .sessionKey(sessionKey)
+                            .roles(UserRoleUtils.defaultRoles())
                             .createTime(LocalDateTime.now())
                             .updateTime(LocalDateTime.now())
                             .build();
@@ -94,11 +100,7 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
         claims.put("userId", wxUser.getId());
         String token = JwtUtil.generateToken(claims);
 
-        UserInfo userInfo = UserInfo.builder()
-                .id(wxUser.getId())
-                .avatarUrl(wxUser.getAvatarUrl())
-                .nickName(wxUser.getNickName())
-                .build();
+        UserInfo userInfo = buildUserInfo(wxUser);
         return WxUserLoginResData.builder().token(token).userInfo(userInfo).build();
     }
 
@@ -113,11 +115,7 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
         baseMapper.update(null, u);
 
         WxUser wxUser = baseMapper.selectById(userId);
-        UserInfo userInfo = UserInfo.builder()
-                .id(wxUser.getId())
-                .avatarUrl(data.getAvatarUrl())
-                .nickName(data.getNickName())
-                .build();
+        UserInfo userInfo = buildUserInfo(wxUser);
         return WxUserLoginResData.builder().userInfo(userInfo).build();
     }
 
@@ -128,7 +126,31 @@ public class WxUserServiceImpl extends ServiceImpl<WxUserMapper, WxUser> impleme
         if (wxUser == null) {
             throw new BizException(40400, "用户不存在");
         }
-        return BeanConvertUtil.copySingleProperties(wxUser, UserInfoResData::new);
+        return toUserInfoResData(wxUser);
+    }
+
+    private UserInfo buildUserInfo(WxUser u) {
+        long storeCount = wifiCodeMapper.countActiveByStoreOwner(u.getId());
+        return UserInfo.builder()
+                .id(u.getId())
+                .avatarUrl(u.getAvatarUrl())
+                .nickName(u.getNickName())
+                .roles(UserRoleUtils.toList(u.getRoles()))
+                .admin(UserRoleUtils.isAdmin(u.getRoles()))
+                .hasStoreBind(storeCount > 0)
+                .build();
+    }
+
+    private UserInfoResData toUserInfoResData(WxUser u) {
+        UserInfoResData d = new UserInfoResData();
+        d.setId(u.getId());
+        d.setAvatarUrl(u.getAvatarUrl());
+        d.setNickName(u.getNickName());
+        d.setCreateTime(u.getCreateTime());
+        d.setRoles(UserRoleUtils.toList(u.getRoles()));
+        d.setAdmin(UserRoleUtils.isAdmin(u.getRoles()));
+        d.setHasStoreBind(wifiCodeMapper.countActiveByStoreOwner(u.getId()) > 0);
+        return d;
     }
 
     private WxLoginResVO getOpenid(String code) {

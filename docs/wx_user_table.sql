@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS wx_user (
     language VARCHAR(32),
     phone VARCHAR(32),
     status INT DEFAULT 1,
+    roles VARCHAR(32)[] DEFAULT ARRAY['SALES']::VARCHAR(32)[],
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP,
     last_login_time TIMESTAMP

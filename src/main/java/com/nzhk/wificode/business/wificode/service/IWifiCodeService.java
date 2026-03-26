@@ -3,6 +3,7 @@ package com.nzhk.wificode.business.wificode.service;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeCreateReqData;
 import com.nzhk.wificode.business.wificode.entity.WifiCode;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeItemResData;
+import com.nzhk.wificode.business.wificode.bean.WifiCodeListResData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeUpdateReqData;
 
 import java.util.List;
@@ -15,7 +16,7 @@ public interface IWifiCodeService {
 
     WifiCodeItemResData getById(String id);
 
-    List<WifiCodeItemResData> listByUserId(String keyword);
+    WifiCodeListResData listByUserId(String keyword);
 
     void deleteById(String id);
 

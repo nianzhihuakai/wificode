@@ -4,13 +4,17 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeCreateReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeItemResData;
+import com.nzhk.wificode.business.wificode.bean.WifiCodeListResData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeUpdateReqData;
+import com.nzhk.wificode.business.wificode.config.WificodeStatsProperties;
 import com.nzhk.wificode.business.wificode.entity.WifiCode;
 import com.nzhk.wificode.common.cache.ContextCache;
 import com.nzhk.wificode.common.exception.BizException;
 import com.nzhk.wificode.common.utils.BeanConvertUtil;
+import com.nzhk.wificode.common.utils.FixedWindowRateLimiter;
 import com.nzhk.wificode.common.utils.IdUtil;
 import com.nzhk.wificode.mapper.WifiCodeMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -18,11 +22,31 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> implements IWifiCodeService {
+
+    @Resource
+    private WificodeStatsProperties statsProperties;
+    @Resource
+    private WifiCodeListStatsService wifiCodeListStatsService;
+    private FixedWindowRateLimiter wifiWriteLimiter;
+
+    @PostConstruct
+    void initWriteLimiter() {
+        wifiWriteLimiter = new FixedWindowRateLimiter(60_000L, statsProperties.getWifiCodeWritePerUserPerMinute());
+    }
+
+    private void checkWifiWriteRateLimit() {
+        String userId = ContextCache.getUserId();
+        if (StringUtils.isEmpty(userId)) {
+            return;
+        }
+        if (!wifiWriteLimiter.tryAcquire("wifi-write:" + userId)) {
+            throw new BizException(42901, "操作过于频繁，请稍后再试");
+        }
+    }
 
     @Override
     public WifiCodeItemResData create(WifiCodeCreateReqData data) {
@@ -30,6 +54,7 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
         if (StringUtils.isEmpty(userId)) {
             throw new BizException(40100, "请先登录");
         }
+        checkWifiWriteRateLimit();
         if (StringUtils.isBlank(data.getSsid())) {
             throw new BizException(40002, "请输入网络名称");
         }
@@ -56,6 +81,7 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
         if (StringUtils.isEmpty(userId)) {
             throw new BizException(40100, "请先登录");
         }
+        checkWifiWriteRateLimit();
         if (StringUtils.isEmpty(data.getId())) {
             throw new BizException(40003, "参数错误");
         }
@@ -91,7 +117,7 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
     }
 
     @Override
-    public List<WifiCodeItemResData> listByUserId(String keyword) {
+    public WifiCodeListResData listByUserId(String keyword) {
         String userId = ContextCache.getUserId();
         if (StringUtils.isEmpty(userId)) {
             throw new BizException(40100, "请先登录");
@@ -106,9 +132,7 @@ public class WifiCodeServiceImpl extends ServiceImpl<WifiCodeMapper, WifiCode> i
             q.and(w -> w.apply("ssid ILIKE {0}", kw).or().apply("brand_name ILIKE {0}", kw));
         }
         List<WifiCode> list = baseMapper.selectList(q);
-        return list.stream()
-                .map(e -> BeanConvertUtil.copySingleProperties(e, WifiCodeItemResData::new))
-                .collect(Collectors.toList());
+        return wifiCodeListStatsService.buildListRes(list);
     }
 
     @Override

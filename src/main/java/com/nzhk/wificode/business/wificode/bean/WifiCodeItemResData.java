@@ -11,6 +11,8 @@ public class WifiCodeItemResData {
     private String ssid;
     private String password;
     private String authType;
+    /** 今日有效连接（由 wifi_scan_log 按 stat_date=今日 聚合） */
+    private Integer todayCount;
     private Integer yesterdayCount;
     private Integer totalCount;
     private Integer status;

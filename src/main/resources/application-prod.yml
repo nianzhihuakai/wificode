@@ -17,6 +17,13 @@ mybatis-plus:
   type-aliases-package: com.nzhk.wificode
 
 wificode:
+  stats:
+    bind-code-ttl-hours: 72
+    report-rate-limit-per-minute: 30
+    bind-attempts-per-day: 5
+    bind-code-per-user-per-minute: 5
+    bind-code-per-wifi-per-hour: 10
+    wifi-code-write-per-user-per-minute: 5
   qrcode:
     storage-dir: /data/wificode/qrcode
   jwt:

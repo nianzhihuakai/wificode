@@ -12,7 +12,10 @@ public class WifiCode {
 
     @TableId
     private String id;
+    /** 推销员/创建者 */
     private String userId;
+    /** 店主，绑定后非空 */
+    private String storeOwnerId;
     private String brandName;
     private String ssid;
     private String password;

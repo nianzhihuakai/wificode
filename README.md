@@ -90,6 +90,48 @@ psql -U postgres -d miniapp_dev -f docs/wx_user_table.sql
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
+## 扫码统计与店主绑定（WiFi 码）
+
+- **语义**：`wifi_code.user_id` 为推销员（创建者）；`store_owner_id` 为店主，通过绑定码核销后写入。
+- **已有库升级**：依次执行 [`docs/migration_v2_scan_bind.sql`](docs/migration_v2_scan_bind.sql)、[`docs/migration_v3_user_roles.sql`](docs/migration_v3_user_roles.sql)、[`docs/migration_v4_bind_ticket_one_per_wifi.sql`](docs/migration_v4_bind_ticket_one_per_wifi.sql)（绑定票据一码一行）；新环境可直接用 [`docs/create.sql`](docs/create.sql)。
+- **用户角色**：`wx_user.roles` 为 PostgreSQL `VARCHAR[]`，默认 `{SALES}`；管理员可在库中写入 `ADMIN`，例如：  
+  `UPDATE wx_user SET roles = ARRAY['SALES','ADMIN']::varchar[] WHERE id = '用户id';`
+- **登录/用户信息**：返回 `roles`（数组）、`admin`、`hasStoreBind`（是否已绑定门店），供小程序控制菜单。
+- **配置（限流，可调）**：`wificode.stats` 下 `report-rate-limit-per-minute`、`bind-attempts-per-day`（绑定尝试/日/用户）、`bind-code-per-user-per-minute`、`bind-code-per-wifi-per-hour`、`wifi-code-write-per-user-per-minute`（新建+编辑合计/分钟/用户）。
+
+### 接口（均带 context-path `/wificode`）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/public/reportConnection` | 有效连接上报，**无需登录**；`data.wifiCodeId` 必填；可选请求头 `token`（已登录则按用户+自然日去重） |
+| GET | `/list` | 推销员：本人创建的码列表（需 token） |
+| GET | `/list/store` | 店主：已绑定为本人的码列表（需 token） |
+| POST | `/bindCode` | 推销员生成店主绑定码，`data.wifiCodeId`（需 token） |
+| POST | `/store/bind` | 店主核销绑定码，`data.bindCode`（需 token） |
+
+`POST /public/reportConnection` 请求体示例：
+
+```json
+{ "data": { "wifiCodeId": "xxx", "deviceInfo": "可选" } }
+```
+
+响应 `data`：`{ "counted": true, "totalCount": 123 }`（`counted` 表示本次是否新计 1 次）。
+
+### 小程序侧约定（契约）
+
+1. 扫码进入页：`onLaunch` / `onLoad` 解析 `scene` 或 `query` 中的 `id`（WiFi 码主键），与现有 `public/get?id=` 一致。
+2. 在确认进入承载页（如 `pages/wifiqrcode/wifiqrcode`）后调用 `POST /wificode/public/reportConnection`；若用户已登录，带上 `token` 以便按「同一用户+同一码+同一天」只计一次。
+3. 未登录访客依赖 IP 去重；若无法取得 IP（如 `unknown`），接口会返回业务错误码 `40005`，可引导登录后再上报。
+4. 店主在「我的」等入口输入推销员提供的绑定码，调用 `POST /wificode/store/bind`（需登录）。
+
+### 定时任务
+
+每日 `00:05`（服务器时区）根据 `wifi_scan_log.stat_date` 回写各码 `yesterday_count`。
+
+### 远期广告分润（占位）
+
+表 `revenue_share_rule`、`ad_revenue_ledger` 已在 `docs/create.sql` 与迁移脚本中创建，对接微信流量主结算与打款流程后再写入业务数据。
+
 ## 扩展说明
 
 1. **新增业务模块**：按 `business/wxuser` 结构新建，遵循 Controller → Service → Mapper 分层

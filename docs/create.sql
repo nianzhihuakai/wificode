@@ -18,9 +18,10 @@ CREATE TABLE IF NOT EXISTS wx_user (
     province VARCHAR(64),
     city VARCHAR(64),
     language VARCHAR(32),
-    phone VARCHAR(32),
-    status INT DEFAULT 1,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                       phone VARCHAR(32),
+                                       status INT DEFAULT 1,
+                                       roles VARCHAR(32)[] DEFAULT ARRAY['SALES']::VARCHAR(32)[],
+                                       create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP,
     last_login_time TIMESTAMP
     );
@@ -34,6 +35,7 @@ COMMENT ON COLUMN wx_user.unionid IS '微信开放平台统一标识';
 COMMENT ON COLUMN wx_user.session_key IS '微信登录会话密钥';
 COMMENT ON COLUMN wx_user.nick_name IS '用户昵称';
 COMMENT ON COLUMN wx_user.avatar_url IS '用户头像URL';
+COMMENT ON COLUMN wx_user.roles IS '多角色：SALES/STORE/ADMIN 等';
 
 -- ============================================================
 -- 2. WiFi 码表
@@ -41,6 +43,7 @@ COMMENT ON COLUMN wx_user.avatar_url IS '用户头像URL';
 CREATE TABLE IF NOT EXISTS wifi_code (
                                          id VARCHAR(32) PRIMARY KEY,
     user_id VARCHAR(32) NOT NULL REFERENCES wx_user(id),
+    store_owner_id VARCHAR(32) REFERENCES wx_user(id),
     brand_name VARCHAR(128) DEFAULT '',
     ssid VARCHAR(128) NOT NULL,
     password VARCHAR(256) DEFAULT '',
@@ -53,13 +56,15 @@ CREATE TABLE IF NOT EXISTS wifi_code (
     );
 
 CREATE INDEX IF NOT EXISTS idx_wifi_code_user_id ON wifi_code(user_id);
+CREATE INDEX IF NOT EXISTS idx_wifi_code_store_owner ON wifi_code(store_owner_id);
 CREATE INDEX IF NOT EXISTS idx_wifi_code_ssid ON wifi_code(ssid);
 CREATE INDEX IF NOT EXISTS idx_wifi_code_brand_name ON wifi_code(brand_name);
 CREATE INDEX IF NOT EXISTS idx_wifi_code_create_time ON wifi_code(create_time);
 
 COMMENT ON TABLE wifi_code IS 'WiFi 二维码信息表';
 COMMENT ON COLUMN wifi_code.id IS '主键，由应用层生成（如 nanoid/uuid）';
-COMMENT ON COLUMN wifi_code.user_id IS '创建用户ID，关联 wx_user.id';
+COMMENT ON COLUMN wifi_code.user_id IS '推销员/创建者 wx_user.id';
+COMMENT ON COLUMN wifi_code.store_owner_id IS '店主 wx_user.id，绑定后写入';
 COMMENT ON COLUMN wifi_code.brand_name IS '品牌名称';
 COMMENT ON COLUMN wifi_code.ssid IS '网络名称';
 COMMENT ON COLUMN wifi_code.password IS 'WiFi 密码';
@@ -90,6 +95,7 @@ CREATE TABLE IF NOT EXISTS wifi_scan_log (
                                              id VARCHAR(32) PRIMARY KEY,
     wifi_code_id VARCHAR(32) NOT NULL REFERENCES wifi_code(id),
     user_id VARCHAR(32),
+    stat_date DATE NOT NULL DEFAULT CURRENT_DATE,
     scan_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ip VARCHAR(64),
     device_info TEXT
@@ -97,11 +103,57 @@ CREATE TABLE IF NOT EXISTS wifi_scan_log (
 
 CREATE INDEX IF NOT EXISTS idx_wifi_scan_log_code_id ON wifi_scan_log(wifi_code_id);
 CREATE INDEX IF NOT EXISTS idx_wifi_scan_log_scan_time ON wifi_scan_log(scan_time);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_wifi_scan_visitor_day ON wifi_scan_log (wifi_code_id, user_id, stat_date) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_wifi_scan_anon_day ON wifi_scan_log (wifi_code_id, ip, stat_date) WHERE user_id IS NULL AND ip IS NOT NULL AND ip <> '';
 
-COMMENT ON TABLE wifi_scan_log IS 'WiFi 码扫码记录，用于统计有效连接';
+COMMENT ON TABLE wifi_scan_log IS 'WiFi 码有效连接记录';
 COMMENT ON COLUMN wifi_scan_log.id IS '主键，由应用层生成';
 COMMENT ON COLUMN wifi_scan_log.wifi_code_id IS 'WiFi 码ID';
-COMMENT ON COLUMN wifi_scan_log.scan_time IS '扫码时间';
+COMMENT ON COLUMN wifi_scan_log.user_id IS '访客 wx_user.id，未登录为空';
+COMMENT ON COLUMN wifi_scan_log.stat_date IS '统计日，用于去重与昨日汇总';
+COMMENT ON COLUMN wifi_scan_log.scan_time IS '记录时间';
+
+CREATE TABLE IF NOT EXISTS wifi_code_bind_ticket (
+    id VARCHAR(32) PRIMARY KEY,
+    wifi_code_id VARCHAR(32) NOT NULL REFERENCES wifi_code(id),
+    code VARCHAR(16) NOT NULL,
+    expire_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    used_by_user_id VARCHAR(32) REFERENCES wx_user(id),
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_wifi_bind_ticket_code ON wifi_code_bind_ticket(code);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_wifi_bind_ticket_wifi_code_id ON wifi_code_bind_ticket(wifi_code_id);
+
+COMMENT ON TABLE wifi_code_bind_ticket IS '店主绑定邀请码：每个 WiFi 码仅一行，重复生成则更新 code/expire_at 并清空核销状态';
+
+-- 远期：广告分成与台账（占位，业务未接入前可不写入）
+CREATE TABLE IF NOT EXISTS revenue_share_rule (
+    id VARCHAR(32) PRIMARY KEY,
+    wifi_code_id VARCHAR(32) REFERENCES wifi_code(id),
+    platform_rate_bp INT NOT NULL DEFAULT 4000,
+    sales_rate_bp INT NOT NULL DEFAULT 3000,
+    store_rate_bp INT NOT NULL DEFAULT 3000,
+    status INT DEFAULT 1,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ad_revenue_ledger (
+    id VARCHAR(32) PRIMARY KEY,
+    wifi_code_id VARCHAR(32) NOT NULL REFERENCES wifi_code(id),
+    period VARCHAR(16) NOT NULL,
+    source_ref VARCHAR(128),
+    amount_cent BIGINT NOT NULL DEFAULT 0,
+    platform_cent BIGINT NOT NULL DEFAULT 0,
+    sales_cent BIGINT NOT NULL DEFAULT 0,
+    store_cent BIGINT NOT NULL DEFAULT 0,
+    status INT DEFAULT 0,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_revenue_ledger_code ON ad_revenue_ledger(wifi_code_id);
 
 -- 上传文件记录表（头像等）
 CREATE TABLE IF NOT EXISTS uploaded_file (

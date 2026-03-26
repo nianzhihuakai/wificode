@@ -1,15 +1,25 @@
 package com.nzhk.wificode.business.wificode.controller;
 
+import com.nzhk.wificode.business.wificode.bean.BindCodeGenerateReqData;
+import com.nzhk.wificode.business.wificode.bean.BindCodeGenerateResData;
+import com.nzhk.wificode.business.wificode.bean.ReportConnectionResData;
+import com.nzhk.wificode.business.wificode.bean.StoreBindReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeCreateReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeDeleteReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeItemResData;
+import com.nzhk.wificode.business.wificode.bean.WifiCodeListResData;
+import com.nzhk.wificode.business.wificode.bean.WifiCodePublicReportReqData;
 import com.nzhk.wificode.business.wificode.bean.WifiCodeUpdateReqData;
 import com.nzhk.wificode.business.wificode.config.WificodeQrcodeProperties;
 import com.nzhk.wificode.business.wificode.service.IWifiCodeService;
+import com.nzhk.wificode.business.wificode.service.IWifiCodeStatsService;
 import com.nzhk.wificode.common.info.RequestInfo;
 import com.nzhk.wificode.common.info.ResponseInfo;
+import com.nzhk.wificode.common.utils.ClientIpUtil;
+import com.nzhk.wificode.common.utils.JwtUtil;
 import com.nzhk.wificode.wechat.service.WechatApiService;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +28,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +40,8 @@ public class WifiCodeController {
 
     @Resource
     private IWifiCodeService wifiCodeService;
+    @Resource
+    private IWifiCodeStatsService wifiCodeStatsService;
     @Resource
     private WechatApiService wechatApiService;
 
@@ -57,8 +68,16 @@ public class WifiCodeController {
     }
 
     @GetMapping("list")
-    public ResponseInfo<List<WifiCodeItemResData>> list(@RequestParam(required = false) String keyword) {
+    public ResponseInfo<WifiCodeListResData> list(@RequestParam(required = false) String keyword) {
         return ResponseInfo.success(wifiCodeService.listByUserId(keyword));
+    }
+
+    /**
+     * 店主视角：仅已绑定为本店主的 WiFi 码
+     */
+    @GetMapping("list/store")
+    public ResponseInfo<WifiCodeListResData> listByStore(@RequestParam(required = false) String keyword) {
+        return ResponseInfo.success(wifiCodeStatsService.listByStoreOwner(keyword));
     }
 
     @PostMapping("delete")
@@ -143,5 +162,40 @@ public class WifiCodeController {
     @GetMapping("public/get")
     public ResponseInfo<WifiCodeItemResData> getPublic(@RequestParam String id) {
         return ResponseInfo.success(wifiCodeService.getByIdPublic(id));
+    }
+
+    /**
+     * 有效连接上报（客人扫码进入小程序后调用，无需登录；可选 token 以便按用户去重）
+     */
+    @PostMapping("public/reportConnection")
+    public ResponseInfo<ReportConnectionResData> reportConnection(
+            @RequestBody RequestInfo<WifiCodePublicReportReqData> requestInfo,
+            HttpServletRequest request,
+            @RequestHeader(value = "token", required = false) String token) {
+        WifiCodePublicReportReqData data = requestInfo != null ? requestInfo.getData() : null;
+        String wifiCodeId = data != null ? data.getWifiCodeId() : null;
+        String deviceInfo = data != null ? data.getDeviceInfo() : null;
+        String visitorUserId = JwtUtil.tryParseUserId(token);
+        String ip = ClientIpUtil.resolve(request);
+        return ResponseInfo.success(wifiCodeStatsService.reportConnection(wifiCodeId, visitorUserId, ip, deviceInfo));
+    }
+
+    /**
+     * 推销员生成店主绑定邀请码
+     */
+    @PostMapping("bindCode")
+    public ResponseInfo<BindCodeGenerateResData> generateBindCode(@RequestBody RequestInfo<BindCodeGenerateReqData> requestInfo) {
+        String wifiCodeId = requestInfo.getData() != null ? requestInfo.getData().getWifiCodeId() : null;
+        return ResponseInfo.success(wifiCodeStatsService.generateBindCode(wifiCodeId));
+    }
+
+    /**
+     * 店主核销绑定码
+     */
+    @PostMapping("store/bind")
+    public ResponseInfo<Void> bindStore(@RequestBody RequestInfo<StoreBindReqData> requestInfo) {
+        String bindCode = requestInfo.getData() != null ? requestInfo.getData().getBindCode() : null;
+        wifiCodeStatsService.bindStore(bindCode);
+        return ResponseInfo.success(null);
     }
 }

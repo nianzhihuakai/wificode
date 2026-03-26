@@ -18,6 +18,13 @@ mybatis-plus:
 
 # 文件上传存储目录（相对或绝对路径）
 wificode:
+  stats:
+    bind-code-ttl-hours: 72
+    report-rate-limit-per-minute: 30
+    bind-attempts-per-day: 5
+    bind-code-per-user-per-minute: 5
+    bind-code-per-wifi-per-hour: 10
+    wifi-code-write-per-user-per-minute: 5
   file:
     storage-dir: E:/data/wificode/uploads
     base-url: /wificode/file/access

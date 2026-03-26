@@ -1,0 +1,4 @@
+-- 用户多角色 + 限流配置依赖（仅库结构）
+ALTER TABLE wx_user ADD COLUMN IF NOT EXISTS roles VARCHAR(32)[] DEFAULT ARRAY['SALES']::VARCHAR(32)[];
+UPDATE wx_user SET roles = ARRAY['SALES']::VARCHAR(32)[] WHERE roles IS NULL;
+COMMENT ON COLUMN wx_user.roles IS '多角色：SALES/STORE/ADMIN 等';
